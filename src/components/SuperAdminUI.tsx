@@ -8,9 +8,11 @@ import {
   MoreVertical, Ban, CheckCircle2, XCircle, Lock,
   Unlock, Database, Activity, Globe, Monitor, Send,
   MessageCircle, ArrowRight, ArrowLeft, Minus, UserX,
-  RotateCcw, AlertTriangle, Save, FileText, Download
+  RotateCcw, AlertTriangle, Save, FileText, Download,
+  CreditCard
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { SubscriptionService } from '../services/subscriptionService';
 import { SupportService, SupportTicket, SupportMessage } from '../services/supportService';
 
 interface Restaurant {
@@ -71,6 +73,8 @@ const SuperAdminUI: React.FC = () => {
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [subscriptionStats, setSubscriptionStats] = useState<any>(null);
   
   // UI states
   const [searchQuery, setSearchQuery] = useState('');
@@ -155,6 +159,7 @@ const SuperAdminUI: React.FC = () => {
       switch (activeTab) {
         case 'overview':
           await fetchSystemStats();
+          await fetchSubscriptions();
           break;
         case 'restaurants':
           await fetchRestaurants();
@@ -185,6 +190,19 @@ const SuperAdminUI: React.FC = () => {
       setSystemStats(data);
     } catch (error) {
       console.error('Error fetching system stats:', error);
+    }
+  };
+
+  const fetchSubscriptions = async () => {
+    try {
+      const [subscriptionsData, statsData] = await Promise.all([
+        SubscriptionService.getAllSubscriptions(),
+        SubscriptionService.getSubscriptionStats()
+      ]);
+      setSubscriptions(subscriptionsData);
+      setSubscriptionStats(statsData);
+    } catch (error) {
+      console.error('Error fetching subscriptions:', error);
     }
   };
 
@@ -584,28 +602,26 @@ const SuperAdminUI: React.FC = () => {
 
               <div className="bg-white rounded-2xl p-6 border border-gray-200">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
-                    <DollarSign className="h-6 w-6 text-yellow-600" />
+                  <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                    <CreditCard className="h-6 w-6 text-purple-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Total Revenue</p>
-                    <p className="text-2xl font-bold text-gray-900">{formatCurrency(systemStats.total_revenue)}</p>
+                    <p className="text-sm text-gray-600">Active Subscriptions</p>
+                    <p className="text-2xl font-bold text-gray-900">{subscriptionStats?.active || 0}</p>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500">Across all restaurants</p>
               </div>
 
               <div className="bg-white rounded-2xl p-6 border border-gray-200">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                    <Zap className="h-6 w-6 text-purple-600" />
+                  <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
+                    <DollarSign className="h-6 w-6 text-yellow-600" />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Points Issued</p>
-                    <p className="text-2xl font-bold text-gray-900">{systemStats.total_points_issued.toLocaleString()}</p>
+                    <p className="text-sm text-gray-600">Monthly Revenue</p>
+                    <p className="text-2xl font-bold text-gray-900">${subscriptionStats?.revenue?.toFixed(2) || '0.00'}</p>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500">Total loyalty points</p>
               </div>
 
               <div className="bg-white rounded-2xl p-6 border border-gray-200">
@@ -619,6 +635,102 @@ const SuperAdminUI: React.FC = () => {
                   </div>
                 </div>
                 <p className="text-xs text-gray-500">Pending support</p>
+              </div>
+            </div>
+
+            {/* Subscription Overview */}
+            {subscriptionStats && (
+              <div className="bg-white rounded-2xl p-6 border border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-6">Subscription Overview</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-blue-50 rounded-xl">
+                    <Crown className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                    <p className="text-2xl font-bold text-blue-900">{subscriptionStats.trial}</p>
+                    <p className="text-sm text-blue-700">Trial Users</p>
+                  </div>
+                  <div className="text-center p-4 bg-green-50 rounded-xl">
+                    <Target className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                    <p className="text-2xl font-bold text-green-900">{subscriptionStats.paid}</p>
+                    <p className="text-sm text-green-700">Paid Users</p>
+                  </div>
+                  <div className="text-center p-4 bg-purple-50 rounded-xl">
+                    <Award className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                    <p className="text-2xl font-bold text-purple-900">{subscriptionStats.total}</p>
+                    <p className="text-sm text-purple-700">Total Users</p>
+                  </div>
+                  <div className="text-center p-4 bg-red-50 rounded-xl">
+                    <TrendingUp className="h-8 w-8 text-red-600 mx-auto mb-2" />
+                    <p className="text-2xl font-bold text-red-900">{subscriptionStats.churnRate.toFixed(1)}%</p>
+                    <p className="text-sm text-red-700">Churn Rate</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Recent Subscriptions */}
+            <div className="bg-white rounded-2xl p-6 border border-gray-200">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold text-gray-900">Recent Subscriptions</h3>
+                <button
+                  onClick={fetchSubscriptions}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">User</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Restaurant</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Plan</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Expires</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subscriptions.slice(0, 10).map((subscription) => (
+                      <tr key={subscription.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {subscription.user?.user_metadata?.first_name} {subscription.user?.user_metadata?.last_name}
+                            </p>
+                            <p className="text-sm text-gray-600">{subscription.user?.email}</p>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <p className="text-gray-900">
+                            {subscription.restaurant?.name || 'Not set up'}
+                          </p>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            subscription.plan_type === 'trial' ? 'bg-blue-100 text-blue-800' :
+                            subscription.plan_type === 'monthly' ? 'bg-green-100 text-green-800' :
+                            'bg-purple-100 text-purple-800'
+                          }`}>
+                            {subscription.plan_type}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            subscription.status === 'active' ? 'bg-green-100 text-green-800' :
+                            subscription.status === 'expired' ? 'bg-red-100 text-red-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {subscription.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600">
+                          {new Date(subscription.current_period_end).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { SubscriptionService } from '../services/subscriptionService';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Home,
@@ -13,14 +14,34 @@ import {
   MapPin,
   HeadphonesIcon,
   Wallet,
-  BarChart3
+  BarChart3,
+  Crown,
+  Clock,
+  ArrowRight
 } from 'lucide-react';
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [subscriptionData, setSubscriptionData] = useState<any>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, signOut } = useAuth();
+
+  React.useEffect(() => {
+    if (user) {
+      checkSubscription();
+    }
+  }, [user]);
+
+  const checkSubscription = async () => {
+    if (!user) return;
+    try {
+      const data = await SubscriptionService.checkSubscriptionAccess(user.id);
+      setSubscriptionData(data);
+    } catch (error) {
+      console.error('Error checking subscription:', error);
+    }
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -124,6 +145,41 @@ export default function DashboardLayout() {
             })}
           </nav>
           <div className="p-4 border-t border-gray-200">
+            {/* Subscription Status */}
+            {subscriptionData && (
+              <div className="mb-4">
+                {subscriptionData.subscription?.plan_type === 'trial' && subscriptionData.daysRemaining <= 7 && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="h-4 w-4 text-yellow-600" />
+                      <span className="text-sm font-medium text-yellow-900">
+                        Trial expires in {subscriptionData.daysRemaining} days
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => navigate('/upgrade')}
+                      className="w-full bg-gradient-to-r from-[#E6A85C] to-[#E85A9B] text-white px-3 py-2 rounded-lg text-sm font-medium hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2"
+                    >
+                      <Crown className="h-4 w-4" />
+                      Upgrade Now
+                    </button>
+                  </div>
+                )}
+                
+                <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-600">Current Plan</span>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                      subscriptionData.subscription?.plan_type === 'trial' ? 'bg-blue-100 text-blue-800' :
+                      'bg-green-100 text-green-800'
+                    }`}>
+                      {subscriptionData.subscription?.plan_type || 'Trial'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div className="flex items-center space-x-3 mb-4">
               <div className="w-8 h-8 bg-gradient-to-r from-[#E6A85C] via-[#E85A9B] to-[#D946EF] rounded-full flex items-center justify-center">
                 <span className="text-white text-sm font-medium">
@@ -144,6 +200,15 @@ export default function DashboardLayout() {
               <Wallet className="w-5 h-5 mr-3" />
               Customer Wallet
             </button>
+            {subscriptionData?.subscription?.plan_type === 'trial' && (
+              <button
+                onClick={() => navigate('/upgrade')}
+                className="w-full flex items-center px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-[#E6A85C] to-[#E85A9B] rounded-lg transition-colors mb-2 hover:shadow-md"
+              >
+                <Crown className="w-5 h-5 mr-3" />
+                Upgrade Plan
+              </button>
+            )}
             <button
               onClick={handleSignOut}
               className="w-full flex items-center px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -170,6 +235,17 @@ export default function DashboardLayout() {
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
             <div className="flex flex-1"></div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
+              {/* Subscription indicator for mobile */}
+              {subscriptionData?.subscription?.plan_type === 'trial' && subscriptionData?.daysRemaining <= 7 && (
+                <button
+                  onClick={() => navigate('/upgrade')}
+                  className="lg:hidden bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1"
+                >
+                  <Clock className="h-3 w-3" />
+                  {subscriptionData.daysRemaining}d left
+                </button>
+              )}
+              
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-gradient-to-r from-[#E6A85C] via-[#E85A9B] to-[#D946EF] rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">
