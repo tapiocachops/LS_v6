@@ -1,12 +1,24 @@
 import React, { useState } from 'react';
+import { useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const LoginPage: React.FC = () => {
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const { signIn } = useAuth();
+
+  // Check for success message from signup
+  const successMessage = location.state?.message;
+  const prefilledEmail = location.state?.email;
+
+  React.useEffect(() => {
+    if (prefilledEmail) {
+      setEmail(prefilledEmail);
+    }
+  }, [prefilledEmail]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,6 +37,12 @@ const LoginPage: React.FC = () => {
   return (
    <div className="min-h-screen bg-gradient-to-br from-white via-gray-100 to-gray-200 flex items-center justify-center p-4">
   <div className="max-w-md w-full space-y-8">
+    {successMessage && (
+      <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-sm text-center">
+        {successMessage}
+      </div>
+    )}
+    
     <div className="text-center">
       <img
         src="/image.png"
@@ -89,6 +107,15 @@ const LoginPage: React.FC = () => {
       >
         {isLoading ? 'Signing in...' : 'Sign in'}
       </button>
+      
+      <div className="text-center mt-4">
+        <Link 
+          to="/signup" 
+          className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          Don't have an account? Sign up for free
+        </Link>
+      </div>
     </form>
   </div>
 </div>

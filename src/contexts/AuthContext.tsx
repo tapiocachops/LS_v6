@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { SubscriptionService } from '../services/subscriptionService';
 
 interface Restaurant {
   id: string;
@@ -351,6 +352,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         return { error: error.message };
+      }
+
+      // Create trial subscription for new users
+      if (data.user) {
+        try {
+          await SubscriptionService.createSubscription(data.user.id, 'trial');
+        } catch (subscriptionError) {
+          console.warn('Failed to create trial subscription:', subscriptionError);
+          // Don't fail the signup if subscription creation fails
+        }
       }
 
       return { error: null };
