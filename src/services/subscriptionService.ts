@@ -60,10 +60,35 @@ export class SubscriptionService {
           periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
       }
 
-      // Use upsert to handle potential race conditions
+      // If existing subscription found, update it instead
+      if (existingSubscription) {
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .update({
+            plan_type: planType,
+            status: 'active',
+            stripe_subscription_id: stripeSubscriptionId,
+            stripe_customer_id: stripeCustomerId,
+            current_period_start: periodStart,
+            current_period_end: periodEnd.toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingSubscription.id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Subscription update error:', error);
+          throw new Error(`Failed to update subscription: ${error.message}`);
+        }
+        
+        return data;
+      }
+
+      // Create new subscription
       const { data, error } = await supabase
         .from('subscriptions')
-        .upsert({
+        .insert({
           user_id: userId,
           plan_type: planType,
           status: 'active',
@@ -71,9 +96,6 @@ export class SubscriptionService {
           stripe_customer_id: stripeCustomerId,
           current_period_start: periodStart,
           current_period_end: periodEnd.toISOString()
-        }, {
-          onConflict: 'user_id',
-          ignoreDuplicates: false
         })
         .select()
         .single();
