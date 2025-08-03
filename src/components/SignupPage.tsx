@@ -170,7 +170,7 @@ const SignupPage: React.FC = () => {
         await handleStripeCheckout();
       }
     } catch (err: any) {
-      setError(err.message || 'Signup failed');
+      setError('Failed to complete signup. Please try signing in if your account was created.');
     } finally {
       setLoading(false);
     }

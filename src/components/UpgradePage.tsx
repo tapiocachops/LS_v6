@@ -99,6 +99,9 @@ const UpgradePage: React.FC = () => {
     setError('');
 
     try {
+      // Check if user already has a subscription
+      const existingSubscription = await SubscriptionService.getUserSubscription(user.id);
+      
       // In a real implementation, this would create a Stripe checkout session
       // For now, we'll simulate the upgrade process
       console.log('Upgrading to plan:', selectedPlan);
@@ -113,7 +116,7 @@ const UpgradePage: React.FC = () => {
         state: { message: 'Subscription upgraded successfully!' }
       });
     } catch (err: any) {
-      setError(err.message || 'Upgrade failed');
+      setError('Failed to upgrade subscription. Please try again or contact support.');
     } finally {
       setUpgrading(false);
     }
