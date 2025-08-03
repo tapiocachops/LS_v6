@@ -164,6 +164,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const createDefaultRestaurant = async (userId: string) => {
     try {
+      // First check if restaurant already exists for this user
+      const { data: existingRestaurant, error: checkError } = await supabase
+        .from('restaurants')
+        .select('*')
+        .eq('owner_id', userId)
+        .limit(1);
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('❌ Error checking existing restaurant:', checkError);
+        return;
+      }
+
+      if (existingRestaurant && existingRestaurant.length > 0) {
+        console.log('🏪 Restaurant already exists for user, using existing...');
+        setRestaurant(existingRestaurant[0]);
+        return;
+      }
+
       const { data: userData } = await supabase.auth.getUser();
       const user = userData.user;
       
@@ -175,27 +193,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const slug = `${baseSlug}-${timestamp}-${randomSuffix}`;
 
       console.log('🏗️ Creating restaurant:', restaurantName);
-
-      // Check if restaurant already exists for this user
-      const { data: existingRestaurant } = await supabase
-        .from('restaurants')
-        .select('id')
-        .eq('owner_id', userId)
-        .limit(1);
-
-      if (existingRestaurant && existingRestaurant.length > 0) {
-        console.log('🏪 Restaurant already exists for user, fetching existing...');
-        const { data: restaurant } = await supabase
-          .from('restaurants')
-          .select('*')
-          .eq('owner_id', userId)
-          .single();
-        
-        if (restaurant) {
-          setRestaurant(restaurant);
-          return;
-        }
-      }
 
       const { data: restaurant, error: restaurantError } = await Promise.race([
         supabase
@@ -234,10 +231,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (restaurantError) {
         console.error('❌ Error creating restaurant:', restaurantError);
-        // If it's a duplicate slug error, try again with a different slug
-        if (restaurantError.code === '23505' && restaurantError.message.includes('slug')) {
-          console.log('🔄 Slug conflict, retrying with new slug...');
-          return createDefaultRestaurant(userId);
+        // If it's a duplicate error, the restaurant might have been created by another process
+        if (restaurantError.code === '23505') {
+          console.log('🔄 Duplicate detected, fetching existing restaurant...');
+          const { data: existingRestaurant } = await supabase
+            .from('restaurants')
+            .select('*')
+            .eq('owner_id', userId)
+            .limit(1);
+          
+          if (existingRestaurant && existingRestaurant.length > 0) {
+            setRestaurant(existingRestaurant[0]);
+            return;
+          }
         }
         return;
       }

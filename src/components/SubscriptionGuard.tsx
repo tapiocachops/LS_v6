@@ -30,15 +30,32 @@ const SubscriptionGuard: React.FC<SubscriptionGuardProps> = ({ children, require
     if (!user) return;
 
     try {
+      setLoading(true);
       const data = await SubscriptionService.checkSubscriptionAccess(user.id);
       setSubscriptionData(data);
 
       // Check if specific feature is required and not available
       if (requiredFeature && !data.features[requiredFeature]) {
         setShowUpgradeModal(true);
+      } else {
+        setShowUpgradeModal(false);
       }
     } catch (error) {
       console.error('Error checking subscription:', error);
+      // On error, allow access to prevent lockout
+      setSubscriptionData({
+        hasAccess: true,
+        subscription: null,
+        features: {
+          maxCustomers: 100,
+          maxBranches: 1,
+          advancedAnalytics: false,
+          prioritySupport: false,
+          customBranding: false,
+          apiAccess: false
+        },
+        daysRemaining: 30
+      });
     } finally {
       setLoading(false);
     }
@@ -119,7 +136,10 @@ const SubscriptionGuard: React.FC<SubscriptionGuardProps> = ({ children, require
   }
 
   // Show trial expiry warning
-  if (subscriptionData?.subscription?.plan_type === 'trial' && subscriptionData?.daysRemaining <= 7) {
+  if (subscriptionData?.hasAccess && 
+      subscriptionData?.subscription?.plan_type === 'trial' && 
+      subscriptionData?.daysRemaining !== undefined && 
+      subscriptionData?.daysRemaining <= 7) {
     return (
       <div className="min-h-screen bg-gray-50">
         {/* Trial Warning Banner */}
@@ -149,7 +169,7 @@ const SubscriptionGuard: React.FC<SubscriptionGuardProps> = ({ children, require
   }
 
   // Show expired subscription message
-  if (!subscriptionData?.hasAccess) {
+  if (subscriptionData && !subscriptionData.hasAccess) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <motion.div

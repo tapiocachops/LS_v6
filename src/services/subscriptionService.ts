@@ -30,6 +30,14 @@ export class SubscriptionService {
     stripeCustomerId?: string
   ): Promise<Subscription> {
     try {
+      // First check if user already has a subscription
+      const existingSubscription = await this.getUserSubscription(userId);
+      
+      if (existingSubscription && existingSubscription.status === 'active') {
+        // If user has active subscription, update it instead of creating new one
+        return await this.updateSubscription(existingSubscription.id, planType, stripeSubscriptionId, stripeCustomerId);
+      }
+
       // Calculate period dates based on plan type
       const now = new Date();
       const periodStart = now.toISOString();
@@ -52,9 +60,10 @@ export class SubscriptionService {
           periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
       }
 
+      // Use upsert to handle potential race conditions
       const { data, error } = await supabase
         .from('subscriptions')
-        .insert({
+        .upsert({
           user_id: userId,
           plan_type: planType,
           status: 'active',
@@ -62,14 +71,70 @@ export class SubscriptionService {
           stripe_customer_id: stripeCustomerId,
           current_period_start: periodStart,
           current_period_end: periodEnd.toISOString()
+        }, {
+          onConflict: 'user_id',
+          ignoreDuplicates: false
         })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Subscription creation error:', error);
+        throw new Error(`Failed to create subscription: ${error.message}`);
+      }
+      
+      return data;
+    } catch (error: any) {
+      console.error('Error creating subscription:', error);
+      throw error;
+    }
+  }
+
+  static async updateSubscription(
+    subscriptionId: string,
+    planType: 'trial' | 'monthly' | 'semiannual' | 'annual',
+    stripeSubscriptionId?: string,
+    stripeCustomerId?: string
+  ): Promise<Subscription> {
+    try {
+      const now = new Date();
+      let periodEnd: Date;
+
+      switch (planType) {
+        case 'trial':
+          periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+          break;
+        case 'monthly':
+          periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+          break;
+        case 'semiannual':
+          periodEnd = new Date(now.getTime() + 180 * 24 * 60 * 60 * 1000);
+          break;
+        case 'annual':
+          periodEnd = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+          break;
+        default:
+          periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      }
+
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .update({
+          plan_type: planType,
+          status: 'active',
+          stripe_subscription_id: stripeSubscriptionId,
+          stripe_customer_id: stripeCustomerId,
+          current_period_end: periodEnd.toISOString(),
+          updated_at: now.toISOString()
+        })
+        .eq('id', subscriptionId)
         .select()
         .single();
 
       if (error) throw error;
       return data;
     } catch (error: any) {
-      console.error('Error creating subscription:', error);
+      console.error('Error updating subscription:', error);
       throw error;
     }
   }
@@ -84,7 +149,11 @@ export class SubscriptionService {
         .limit(1)
         .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching subscription:', error);
+        return null;
+      }
+      
       return data;
     } catch (error: any) {
       console.error('Error fetching user subscription:', error);
@@ -119,35 +188,74 @@ export class SubscriptionService {
     daysRemaining?: number;
   }> {
     try {
-      const subscription = await this.getUserSubscription(userId);
-      
-      if (!subscription) {
+      // Use the safe database function to check subscription status
+      const { data: statusData, error: statusError } = await supabase
+        .rpc('get_user_subscription_status', { user_uuid: userId });
+
+      if (statusError) {
+        console.error('Error checking subscription status:', statusError);
+        // Fallback to basic check
+        const subscription = await this.getUserSubscription(userId);
+        return this.fallbackAccessCheck(subscription);
+      }
+
+      const status = statusData?.[0];
+      if (!status) {
         return {
           hasAccess: false,
           subscription: null,
-          features: this.getTrialFeatures()
+          features: this.getTrialFeatures(),
+          daysRemaining: 0
         };
       }
 
-      const now = new Date();
-      const endDate = new Date(subscription.current_period_end);
-      const hasAccess = subscription.status === 'active' && endDate > now;
-      const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      // Get full subscription details
+      const subscription = await this.getUserSubscription(userId);
 
       return {
-        hasAccess,
+        hasAccess: status.has_access,
         subscription,
-        features: this.getPlanFeatures(subscription.plan_type),
-        daysRemaining: daysRemaining > 0 ? daysRemaining : 0
+        features: this.getPlanFeatures(status.plan_type),
+        daysRemaining: status.days_remaining
       };
     } catch (error: any) {
       console.error('Error checking subscription access:', error);
+      // Fallback to basic access
       return {
-        hasAccess: false,
+        hasAccess: true, // Allow access during errors to prevent lockout
         subscription: null,
-        features: this.getTrialFeatures()
+        features: this.getTrialFeatures(),
+        daysRemaining: 30
       };
     }
+  }
+
+  private static fallbackAccessCheck(subscription: Subscription | null): {
+    hasAccess: boolean;
+    subscription: Subscription | null;
+    features: PlanFeatures;
+    daysRemaining?: number;
+  } {
+    if (!subscription) {
+      return {
+        hasAccess: true, // Allow access for new users
+        subscription: null,
+        features: this.getTrialFeatures(),
+        daysRemaining: 30
+      };
+    }
+
+    const now = new Date();
+    const endDate = new Date(subscription.current_period_end);
+    const hasAccess = subscription.status === 'active' && endDate > now;
+    const daysRemaining = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+    return {
+      hasAccess,
+      subscription,
+      features: this.getPlanFeatures(subscription.plan_type),
+      daysRemaining: Math.max(0, daysRemaining)
+    };
   }
 
   static getPlanFeatures(planType: 'trial' | 'monthly' | 'semiannual' | 'annual'): PlanFeatures {
