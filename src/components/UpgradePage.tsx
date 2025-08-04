@@ -6,12 +6,16 @@ import {
   Users, BarChart3, Shield, Zap, Star, Gift, Target,
   Loader2, AlertCircle
 } from 'lucide-react';
+import { loadStripe } from '@stripe/stripe-js';
 import { SubscriptionService } from '../services/subscriptionService';
 import { useAuth } from '../contexts/AuthContext';
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
 
 const UpgradePage: React.FC = () => {
   const [currentSubscription, setCurrentSubscription] = useState<any>(null);
   const [selectedPlan, setSelectedPlan] = useState('monthly');
+  const [autoRenew, setAutoRenew] = useState(true);
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
   const [error, setError] = useState('');
@@ -99,24 +103,44 @@ const UpgradePage: React.FC = () => {
     setError('');
 
     try {
-      // Check if user already has a subscription
-      const existingSubscription = await SubscriptionService.getUserSubscription(user.id);
-      
-      // In a real implementation, this would create a Stripe checkout session
-      // For now, we'll simulate the upgrade process
-      console.log('Upgrading to plan:', selectedPlan);
-      
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Create new subscription
-      await SubscriptionService.createSubscription(user.id, selectedPlan as any);
-      
-      navigate('/dashboard', {
-        state: { message: 'Subscription upgraded successfully!' }
+      // Create Stripe checkout session
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          planType: selectedPlan,
+          autoRenew,
+          successUrl: `${window.location.origin}/dashboard?payment=success`,
+          cancelUrl: `${window.location.origin}/upgrade?payment=cancelled`
+        })
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create checkout session');
+      }
+
+      const { sessionId } = await response.json();
+      
+      // Redirect to Stripe Checkout
+      const stripe = await stripePromise;
+      if (!stripe) {
+        throw new Error('Stripe failed to load');
+      }
+
+      const { error: stripeError } = await stripe.redirectToCheckout({
+        sessionId
+      });
+
+      if (stripeError) {
+        throw new Error(stripeError.message);
+      }
     } catch (err: any) {
-      setError('Failed to upgrade subscription. Please try again or contact support.');
+      console.error('Upgrade error:', err);
+      setError(err.message || 'Failed to process payment. Please try again.');
     } finally {
       setUpgrading(false);
     }
@@ -273,12 +297,80 @@ const UpgradePage: React.FC = () => {
           ))}
         </div>
 
+        {/* Auto-Renew Toggle */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl p-6 border border-gray-200 mb-8"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Billing Options</h3>
+              <p className="text-gray-600">
+                {selectedPlan === 'monthly' 
+                  ? 'Automatically renew your subscription each month'
+                  : selectedPlan === 'semiannual'
+                  ? 'Automatically renew your subscription every 6 months'
+                  : 'Automatically renew your subscription annually'
+                }
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-600">Auto-Renew</span>
+              <button
+                onClick={() => setAutoRenew(!autoRenew)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  autoRenew ? 'bg-gradient-to-r from-[#E6A85C] to-[#E85A9B]' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    autoRenew ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+          
+          {!autoRenew && (
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-yellow-800 text-sm">
+                <strong>Note:</strong> Without auto-renew, you'll need to manually renew your subscription before it expires.
+              </p>
+            </div>
+          )}
+        </motion.div>
         {/* Upgrade Button */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-center"
         >
+          <div className="bg-white rounded-2xl p-6 border border-gray-200 mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Summary</h3>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="font-medium text-gray-900">{currentPlan?.name}</p>
+                <p className="text-sm text-gray-600">{currentPlan?.period}</p>
+                <p className="text-sm text-gray-600">
+                  Auto-Renew: {autoRenew ? 'Enabled' : 'Disabled'}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-gray-900">{currentPlan?.price}</p>
+              </div>
+            </div>
+            
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-green-600" />
+                <span className="text-sm font-medium text-green-900">
+                  Secure payment powered by Stripe
+                </span>
+              </div>
+            </div>
+          </div>
+
           <button
             onClick={handleUpgrade}
             disabled={upgrading}
@@ -289,7 +381,7 @@ const UpgradePage: React.FC = () => {
             ) : (
               <>
                 <CreditCard className="h-5 w-5" />
-                Upgrade to {plans.find(p => p.planId === selectedPlan)?.name}
+                Proceed to Checkout
                 <ArrowRight className="h-5 w-5" />
               </>
             )}

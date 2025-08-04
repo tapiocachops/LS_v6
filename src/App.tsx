@@ -20,6 +20,7 @@ import SupportUI from './components/SupportUI';
 import SuperAdminLogin from './components/SuperAdminLogin';
 import PrivacyPage from './components/PrivacyPage';
 import TermsPage from './components/TermsPage';
+import BillingPage from './components/BillingPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -114,10 +115,10 @@ function App() {
             <Route path="menu-items" element={<MenuItemsPage />} />
             <Route path="loyalty-config" element={<LoyaltyConfigPage />} />
             <Route path="branches" element={<BranchManagement />} />
+            <Route path="billing" element={<BillingPage />} />
             <Route path="support" element={<SupportUI />} />
             <Route path="qr" element={<div className="p-8 text-center text-gray-500">QR Codes page coming soon...</div>} />
             <Route path="analytics" element={<div className="p-8 text-center text-gray-500">Analytics page coming soon...</div>} />
-            <Route path="billing" element={<div className="p-8 text-center text-gray-500">Billing page coming soon...</div>} />
             <Route path="settings" element={<div className="p-8 text-center text-gray-500">Settings page coming soon...</div>} />
           </Route>
           

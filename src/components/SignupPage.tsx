@@ -18,7 +18,6 @@ interface PlanDetails {
   price: string;
   period: string;
   features: string[];
-  stripePriceId?: string;
 }
 
 const SignupPage: React.FC = () => {
@@ -28,6 +27,7 @@ const SignupPage: React.FC = () => {
   
   const [step, setStep] = useState(1);
   const [selectedPlan, setSelectedPlan] = useState('trial');
+  const [autoRenew, setAutoRenew] = useState(true);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -69,7 +69,6 @@ const SignupPage: React.FC = () => {
         'Priority support',
         'Custom rewards'
       ],
-      stripePriceId: 'price_monthly_299'
     },
     semiannual: {
       planId: 'semiannual',
@@ -83,7 +82,6 @@ const SignupPage: React.FC = () => {
         'API access',
         'Dedicated support'
       ],
-      stripePriceId: 'price_semiannual_999'
     },
     annual: {
       planId: 'annual',
@@ -97,7 +95,6 @@ const SignupPage: React.FC = () => {
         'Account manager',
         'Priority features'
       ],
-      stripePriceId: 'price_annual_1999'
     }
   };
 
@@ -178,25 +175,41 @@ const SignupPage: React.FC = () => {
 
   const handleStripeCheckout = async () => {
     try {
-      const stripe = await stripePromise;
-      if (!stripe) throw new Error('Stripe failed to load');
+      // Create Stripe checkout session
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          planType: selectedPlan,
+          autoRenew,
+          successUrl: `${window.location.origin}/login?payment=success&email=${encodeURIComponent(formData.email)}`,
+          cancelUrl: `${window.location.origin}/signup?payment=cancelled`
+        })
+      });
 
-      const plan = plans[selectedPlan];
-      if (!plan.stripePriceId) throw new Error('Invalid plan selected');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create checkout session');
+      }
 
-      // In a real implementation, you would call your backend to create a Stripe checkout session
-      // For now, we'll simulate the process
-      console.log('Creating Stripe checkout session for:', plan);
+      const { sessionId } = await response.json();
       
-      // Simulate successful payment
-      setTimeout(() => {
-        navigate('/login', { 
-          state: { 
-            message: 'Payment successful! Your account has been activated. Please sign in.',
-            email: formData.email
-          }
-        });
-      }, 2000);
+      // Redirect to Stripe Checkout
+      const stripe = await stripePromise;
+      if (!stripe) {
+        throw new Error('Stripe failed to load');
+      }
+
+      const { error: stripeError } = await stripe.redirectToCheckout({
+        sessionId
+      });
+
+      if (stripeError) {
+        throw new Error(stripeError.message);
+      }
 
     } catch (err: any) {
       setError(err.message || 'Payment processing failed');
@@ -481,6 +494,31 @@ const SignupPage: React.FC = () => {
                   ))}
                 </div>
 
+                {/* Auto-Renew Toggle for Paid Plans */}
+                {selectedPlan !== 'trial' && (
+                  <div className="bg-gray-50 rounded-xl p-4 mb-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-gray-900">Auto-Renew</p>
+                        <p className="text-sm text-gray-600">
+                          Automatically renew your subscription to avoid service interruption
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setAutoRenew(!autoRenew)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          autoRenew ? 'bg-gradient-to-r from-[#E6A85C] to-[#E85A9B]' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            autoRenew ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {/* Selected Plan Summary */}
                 <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl p-6 border border-gray-200 mb-8">
                   <h3 className="font-bold text-gray-900 mb-4 font-['Space_Grotesk']">
@@ -490,6 +528,11 @@ const SignupPage: React.FC = () => {
                     <div>
                       <p className="font-medium text-gray-900">{currentPlan.name}</p>
                       <p className="text-sm text-gray-600">{currentPlan.period}</p>
+                      {selectedPlan !== 'trial' && (
+                        <p className="text-sm text-gray-600">
+                          Auto-Renew: {autoRenew ? 'Enabled' : 'Disabled'}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="text-2xl font-bold text-gray-900">{currentPlan.price}</p>
@@ -533,7 +576,7 @@ const SignupPage: React.FC = () => {
                         ) : (
                           <>
                             <CreditCard className="h-4 w-4" />
-                            Complete Payment
+                            Proceed to Checkout
                           </>
                         )}
                       </>

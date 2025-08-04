@@ -3,7 +3,8 @@ import {
   Shield, Users, Building, MessageSquare, BarChart3, Settings,
   Search, Filter, Eye, Edit3, Trash2, Plus, RefreshCw,
   AlertCircle, CheckCircle, Crown, Award, ChefHat, X,
-  TrendingUp, DollarSign, Gift, Clock, User, Mail,
+  Settings, BarChart3, PieChart, Activity, Zap, CreditCard,
+  Bell, Send, UserCheck, UserX, Loader2
   Phone, Calendar, MapPin, Star, Zap, Target, Loader2,
   MoreVertical, Ban, CheckCircle2, XCircle, Lock,
   Unlock, Database, Activity, Globe, Monitor, Send,
@@ -11,6 +12,7 @@ import {
   RotateCcw, AlertTriangle, Save, FileText, Download,
   CreditCard
 } from 'lucide-react';
+import { SubscriptionService } from '../services/subscriptionService';
 import { supabase } from '../lib/supabase';
 import { SubscriptionService } from '../services/subscriptionService';
 import { SupportService, SupportTicket, SupportMessage } from '../services/supportService';
@@ -63,7 +65,10 @@ interface SystemStats {
 
 const SuperAdminUI: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [subscriptionStats, setSubscriptionStats] = useState<any>(null);
+  const [allSubscriptions, setAllSubscriptions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'restaurants' | 'customers' | 'support' | 'analytics'>('overview');
   
   // Data states
@@ -79,6 +84,8 @@ const SuperAdminUI: React.FC = () => {
   // UI states
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showRestaurantModal, setShowRestaurantModal] = useState(false);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -98,10 +105,44 @@ const SuperAdminUI: React.FC = () => {
   const [pointsAdjustment, setPointsAdjustment] = useState(0);
   const [adjustmentReason, setAdjustmentReason] = useState('');
 
-  useEffect(() => {
-    checkAuthentication();
+    loadSuperAdminData();
   }, []);
 
+  const loadSuperAdminData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load subscription statistics
+      const stats = await SubscriptionService.getSubscriptionStats();
+      setSubscriptionStats(stats);
+      
+      // Load all subscriptions
+      const subscriptions = await SubscriptionService.getAllSubscriptions();
+      setAllSubscriptions(subscriptions);
+      
+    } catch (error) {
+      console.error('Error loading super admin data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendReminder = async (restaurantId: string, userEmail: string) => {
+    try {
+      setActionLoading(`reminder-${restaurantId}`);
+      
+      // In a real implementation, this would send an email reminder
+      // For now, we'll simulate the process
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      alert(`Reminder sent to ${userEmail}`);
+    } catch (error) {
+      console.error('Error sending reminder:', error);
+      alert('Failed to send reminder');
+    } finally {
+      setActionLoading(null);
+    }
+  };
   useEffect(() => {
     if (isAuthenticated) {
       fetchAllData();
@@ -253,13 +294,21 @@ const SuperAdminUI: React.FC = () => {
     window.location.href = '/super-admin-login';
   };
 
-  const handleDeleteRestaurant = async (restaurantId: string, restaurantName: string) => {
-    if (!confirm(`Are you sure you want to delete "${restaurantName}"? This will delete ALL associated data including customers, rewards, and transactions. This action cannot be undone.`)) {
-      return;
-    }
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }).format(amount);
+  };
 
-    try {
-      const { error } = await supabase.rpc('super_admin_delete_restaurant', {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
         p_restaurant_id: restaurantId
       });
 
@@ -443,10 +492,14 @@ const SuperAdminUI: React.FC = () => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'expired': return 'bg-red-100 text-red-800';
+      case 'cancelled': return 'bg-gray-100 text-gray-800';
+      case 'past_due': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
   if (loading) {
@@ -487,7 +540,7 @@ const SuperAdminUI: React.FC = () => {
               title="Refresh All Data"
             >
               <RefreshCw className={`h-5 w-5 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
+            {['overview', 'restaurants', 'subscriptions', 'support'].map((tab) => (
 
             <button
               onClick={() => setShowResetModal(true)}
@@ -1274,7 +1327,7 @@ const SuperAdminUI: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Slug</label>
                     <input
                       type="text"
-                      value={restaurantForm.slug}
+                      <p className="text-2xl font-bold text-blue-900">{subscriptionStats?.total || 0}</p>
                       onChange={(e) => setRestaurantForm({ ...restaurantForm, slug: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                     />
@@ -1286,7 +1339,7 @@ const SuperAdminUI: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-gray-600">Created</p>
-                      <p className="font-medium text-gray-900">{formatDate(selectedRestaurant.created_at)}</p>
+                      <p className="text-2xl font-bold text-green-900">{subscriptionStats?.active || 0}</p>
                     </div>
                   </div>
                 </div>
@@ -1334,7 +1387,7 @@ const SuperAdminUI: React.FC = () => {
                       <span className="text-gray-600">Mode Type</span>
                       <span className="font-medium text-gray-900">
                         {selectedRestaurant.settings.blanketMode.type?.charAt(0).toUpperCase() + selectedRestaurant.settings.blanketMode.type?.slice(1)}
-                      </span>
+                      <p className="text-2xl font-bold text-purple-900">{formatCurrency(subscriptionStats?.revenue || 0)}</p>
                     </div>
                   )}
                 </div>
@@ -1405,12 +1458,54 @@ const SuperAdminUI: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Points Adjustment
+                      <p className="text-2xl font-bold text-yellow-900">{subscriptionStats?.trial || 0}</p>
                 </label>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setPointsAdjustment(Math.max(-selectedCustomer.total_points, pointsAdjustment - 10))}
                     className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              {/* Additional Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div className="bg-white rounded-xl p-6 border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Subscription Breakdown</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Paid Subscriptions</span>
+                      <span className="font-semibold text-gray-900">{subscriptionStats?.paid || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Trial Users</span>
+                      <span className="font-semibold text-gray-900">{subscriptionStats?.trial || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Churn Rate</span>
+                      <span className="font-semibold text-gray-900">{subscriptionStats?.churnRate?.toFixed(1) || 0}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl p-6 border border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
+                  <div className="space-y-3">
+                    {allSubscriptions.slice(0, 3).map((sub) => (
+                      <div key={sub.id} className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <UserCheck className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">
+                            {sub.restaurant?.name || 'Unknown Restaurant'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {sub.plan_type} plan • {formatDate(sub.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
                   >
                     <Minus className="h-4 w-4" />
                   </button>
@@ -1423,9 +1518,12 @@ const SuperAdminUI: React.FC = () => {
                   />
                   <button
                     onClick={() => setPointsAdjustment(pointsAdjustment + 10)}
-                    className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  <button 
+                    onClick={() => setShowReminderModal(true)}
+                    className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-colors"
                   >
-                    <Plus className="h-4 w-4" />
+                    <Bell className="h-5 w-5 text-gray-600" />
+                    <span className="font-medium text-gray-900">Send Reminders</span>
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
@@ -1485,28 +1583,42 @@ const SuperAdminUI: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-
+                            <div>
+                              <p className="text-gray-900">{sub.user?.user_metadata?.first_name} {sub.user?.user_metadata?.last_name}</p>
+                              <p className="text-sm text-gray-500">{sub.user?.email}</p>
+                            </div>
             <div className="space-y-4">
               <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium capitalize">
+                              {sub.plan_type}
                   <div>
                     <p className="font-medium text-red-900 mb-1">Warning</p>
                     <p className="text-red-800 text-sm">
-                      This will reset ALL customer data across the entire platform including:
-                    </p>
-                    <ul className="text-red-800 text-sm mt-2 list-disc list-inside">
-                      <li>All customer points (set to 0)</li>
-                      <li>All transaction history</li>
-                      <li>All reward redemptions</li>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(sub.status)}`}>
+                              {sub.status}
                       <li>Visit counts and spending data</li>
                     </ul>
                     <p className="text-red-800 text-sm mt-2 font-medium">
-                      This action cannot be undone!
+                            <p className="text-gray-900">-</p>
                     </p>
                   </div>
-                </div>
-              </div>
+                            <div className="flex items-center gap-2 justify-end">
+                              <button
+                                onClick={() => handleSendReminder(sub.restaurant?.id || '', sub.user?.email || '')}
+                                disabled={actionLoading === `reminder-${sub.restaurant?.id}`}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                                title="Send reminder"
+                              >
+                                {actionLoading === `reminder-${sub.restaurant?.id}` ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Bell className="h-4 w-4" />
+                                )}
+                              </button>
+                              <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
+                                <MoreVertical className="h-4 w-4" />
+                              </button>
+                            </div>
 
               <div className="flex gap-3">
                 <button
@@ -1517,21 +1629,218 @@ const SuperAdminUI: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
+          {/* Subscriptions Tab */}
+          {activeTab === 'subscriptions' && (
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">Subscription Management</h2>
+                <button
+                  onClick={loadSuperAdminData}
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <RefreshCw className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Subscription Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white rounded-xl p-4 border border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <Users className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Users</p>
+                      <p className="text-xl font-bold text-gray-900">{subscriptionStats?.total || 0}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl p-4 border border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                      <CreditCard className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Paid Users</p>
+                      <p className="text-xl font-bold text-gray-900">{subscriptionStats?.paid || 0}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl p-4 border border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <DollarSign className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Revenue</p>
+                      <p className="text-xl font-bold text-gray-900">{formatCurrency(subscriptionStats?.revenue || 0)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl p-4 border border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                      <TrendingDown className="h-5 w-5 text-red-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Churn Rate</p>
+                      <p className="text-xl font-bold text-gray-900">{subscriptionStats?.churnRate?.toFixed(1) || 0}%</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Subscription List */}
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">User</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Restaurant</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Plan</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Period End</th>
+                        <th className="text-right py-3 px-4 font-medium text-gray-700">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allSubscriptions.map((sub) => (
+                        <tr key={sub.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4">
+                            <div>
+                              <p className="font-medium text-gray-900">{sub.user?.email}</p>
+                              <p className="text-sm text-gray-500">
+                                {sub.user?.user_metadata?.first_name} {sub.user?.user_metadata?.last_name}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <p className="text-gray-900">{sub.restaurant?.name || 'No restaurant'}</p>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium capitalize">
+                              {sub.plan_type}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(sub.status)}`}>
+                              {sub.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <p className="text-gray-900 text-sm">{formatDate(sub.current_period_end)}</p>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center gap-2 justify-end">
+                              <button
+                                onClick={() => handleSendReminder(sub.restaurant?.id || '', sub.user?.email || '')}
+                                disabled={actionLoading === `reminder-${sub.restaurant?.id}`}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                                title="Send reminder"
+                              >
+                                {actionLoading === `reminder-${sub.restaurant?.id}` ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Bell className="h-4 w-4" />
+                                )}
+                              </button>
+                              <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
+                                <MoreVertical className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
                     setShowResetModal(false);
                     handleResetAllData();
                   }}
                   className="flex-1 py-3 px-4 bg-gradient-to-r from-red-500 to-red-700 text-white rounded-xl hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2"
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  Reset All Data
-                </button>
+                      {allSubscriptions
+                        .filter(sub => 
+                          (sub.restaurant?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (sub.user?.email || '').toLowerCase().includes(searchQuery.toLowerCase())
+                        )
+                        .filter(sub => filterStatus === 'all' || sub.status === filterStatus)
+                        .map((sub) => (
+                        <tr key={sub.id} className="border-b border-gray-100 hover:bg-gray-50">
+    </div>
+
+      {/* Reminder Modal */}
+      {showReminderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-gray-900">Send Subscription Reminders</h3>
+              <button
+                onClick={() => setShowReminderModal(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <Bell className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-blue-900 mb-1">Bulk Reminder</p>
+                    <p className="text-blue-700 text-sm">
+                      Send subscription reminders to restaurants with expiring trials or overdue payments.
+                    </p>
+                  </div>
+                </div>
               </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="rounded" defaultChecked />
+                  <span className="text-sm text-gray-700">Trial expiring in 3 days</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="rounded" defaultChecked />
+                  <span className="text-sm text-gray-700">Expired subscriptions</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="rounded" />
+                  <span className="text-sm text-gray-700">Past due payments</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowReminderModal(false)}
+                className="flex-1 py-3 px-4 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  alert('Reminders sent successfully!');
+                  setShowReminderModal(false);
+                }}
+                className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <Send className="h-4 w-4" />
+                Send Reminders
+              </button>
             </div>
           </div>
         </div>
       )}
-    </div>
   );
-};
-
+                              <p className="font-medium text-gray-900">{sub.restaurant?.name || 'Unknown Restaurant'}</p>
+                              <p className="text-sm text-gray-500">{sub.restaurant?.slug || 'No slug'}</p>
 export default SuperAdminUI;

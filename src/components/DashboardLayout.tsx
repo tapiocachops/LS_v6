@@ -55,6 +55,7 @@ export default function DashboardLayout() {
     { name: 'Customers', href: '/customers', icon: Users },
     { name: 'Branches', href: '/dashboard/branches', icon: MapPin },
     { name: 'Loyalty Config', href: '/dashboard/loyalty-config', icon: Settings },
+    { name: 'Billing', href: '/dashboard/billing', icon: CreditCard },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     { name: 'Support', href: '/dashboard/support', icon: HeadphonesIcon },
   ];
