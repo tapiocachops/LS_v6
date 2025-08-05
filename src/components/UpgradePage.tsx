@@ -22,63 +22,64 @@ const UpgradePage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Find the current plan based on selected plan
-  const currentPlan = plans.find(p => p.planId === selectedPlan);
-
   const plans = [
-    {
-      planId: 'monthly',
-      name: 'Monthly',
-      price: '$2.99',
-      period: 'per month',
-      description: 'Perfect for growing restaurants',
-      features: [
-        'Unlimited customers',
-        'Advanced loyalty features',
-        'Multi-branch support',
-        'Advanced analytics',
-        'Priority support',
-        'Custom rewards',
-        'Staff management'
-      ],
-      popular: true,
-      savings: null
-    },
-    {
-      planId: 'semiannual',
-      name: '6 Months',
-      price: '$9.99',
-      period: 'one-time',
-      description: 'Save 44% with 6-month plan',
-      features: [
-        'Everything in Monthly',
-        'Advanced ROI analytics',
-        'Custom branding',
-        'API access',
-        'Dedicated support',
-        'Training sessions'
-      ],
-      popular: false,
-      savings: '44% savings'
-    },
-    {
-      planId: 'annual',
-      name: '1 Year',
-      price: '$19.99',
-      period: 'one-time',
-      description: 'Best value - Save 67%',
-      features: [
-        'Everything in 6 Months',
-        'White-label solution',
-        'Custom integrations',
-        'Account manager',
-        'Advanced reporting',
-        'Priority feature requests'
-      ],
-      popular: false,
-      savings: '67% savings'
-    }
-  ];
+  {
+    planId: 'monthly',
+    name: 'Monthly',
+    price: '$2.99',
+    period: 'per month',
+    description: 'Perfect for growing restaurants',
+    features: [
+      'Unlimited customers',
+      'Advanced loyalty features',
+      'Multi-branch support',
+      'Advanced analytics',
+      'Priority support',
+      'Custom rewards',
+      'Staff management'
+    ],
+    popular: true,
+    savings: null
+  },
+  {
+    planId: 'semiannual',
+    name: '6 Months',
+    price: '$9.99',
+    period: 'one-time',
+    description: 'Save 44% with 6-month plan',
+    features: [
+      'Everything in Monthly',
+      'Advanced ROI analytics',
+      'Custom branding',
+      'API access',
+      'Dedicated support',
+      'Training sessions'
+    ],
+    popular: false,
+    savings: '44% savings'
+  },
+  {
+    planId: 'annual',
+    name: '1 Year',
+    price: '$19.99',
+    period: 'one-time',
+    description: 'Best value - Save 67%',
+    features: [
+      'Everything in 6 Months',
+      'White-label solution',
+      'Custom integrations',
+      'Account manager',
+      'Advanced reporting',
+      'Priority feature requests'
+    ],
+    popular: false,
+    savings: '67% savings'
+  }
+];
+
+// ✅ Use it AFTER defining:
+const currentPlan = plans.find(p => p.planId === selectedPlan);
+
 
   useEffect(() => {
     if (user) {
