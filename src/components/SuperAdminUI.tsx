@@ -149,7 +149,7 @@ export default function SuperAdminUI() {
           status,
           created_at,
           current_period_end,
-          users!inner(email)
+          user:users(email)
         `)
         .order('created_at', { ascending: false })
         .limit(10);
@@ -157,7 +157,7 @@ export default function SuperAdminUI() {
       if (data) {
         const formatted = data.map(sub => ({
           id: sub.id,
-          user_email: (sub.users as any).email,
+          user_email: (sub.user as any).email,
           plan_type: sub.plan_type,
           status: sub.status,
           created_at: sub.created_at,

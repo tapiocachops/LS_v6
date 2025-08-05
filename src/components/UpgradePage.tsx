@@ -22,6 +22,9 @@ const UpgradePage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // Find the current plan based on selected plan
+  const currentPlan = plans.find(p => p.planId === selectedPlan);
+
   const plans = [
     {
       planId: 'monthly',
